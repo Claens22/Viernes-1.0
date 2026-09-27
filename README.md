@@ -334,7 +334,7 @@ The central idea behind Viernes can be summarized simply:
 ## Documentation
 
 - [Architecture](docs/arquitectura.md)
-- [Development history](docs/desarrollo.md)
+- [Development history](docs/development-history.md)
 - [The origin of the watchdog](docs/watchdog.md)
 
 Status: Experimental / In development
