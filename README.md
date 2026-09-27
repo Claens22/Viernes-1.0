@@ -339,3 +339,19 @@ The central idea behind Viernes can be summarized simply:
 
 Status: Experimental / In development
 Author: Claens
+
+License and usage
+
+Viernes is a publicly available project developed by Claens.
+
+The source code is published so that others can inspect, study, test, experiment with, and provide feedback on the project.
+
+No open-source license is currently granted for the Viernes source code.
+
+All rights to the original source code are reserved by the author, except for the rights that GitHub's Terms of Service necessarily grant to users of the platform, such as viewing and forking public repositories within GitHub.
+
+Public availability of the repository does not grant permission to commercially use, redistribute, or incorporate the Viernes source code into other projects.
+
+If you are interested in using Viernes or substantial portions of its code for a different project or for commercial purposes, please contact the author first.
+
+This project is published publicly primarily for learning, experimentation, technical discussion, and constructive feedback.
