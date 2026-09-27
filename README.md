@@ -331,6 +331,11 @@ The central idea behind Viernes can be summarized simply:
 «Don't build a bigger brain to do everything. Build a better system around the brain you already have.»
 
 ---
+## Documentation
+
+- [Architecture](docs/arquitectura.md)
+- [Development history](docs/desarrollo.md)
+- [The origin of the watchdog](docs/watchdog.md)
 
 Status: Experimental / In development
 Author: Claens
