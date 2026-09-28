@@ -476,3 +476,440 @@ It is an experimental system whose structure has emerged through:
 The goal is not to claim that every architectural decision is optimal.
 
 The goal is to document how the system evolved, why decisions were made, and what was learned from them.
+---
+
+17. The transition from V7.3 to the next architecture
+
+The development of the watchdog eventually revealed another limitation.
+
+The watchdog had accumulated knowledge about repeated failures and had begun to make decisions that were not strictly related to process health.
+
+In particular, the rule that repeated failures involving the same task could eventually lead to REVIEW was becoming a task-management decision rather than a process-health decision.
+
+This created an architectural question:
+
+«Should the watchdog decide what happens to a task, or should that decision belong to the Controller?»
+
+The answer was to separate the responsibilities again.
+
+The watchdog should report what happened.
+
+The Controller should decide what that event means for the task.
+
+The intended separation became:
+
+```
+WATCHDOG
+   │
+   ├── detects failure
+   ├── logs failure
+   └── restarts process
+             │
+             ▼
+        CONTROLLER
+             │
+             ├── evaluates task history
+             ├── counts repeated failures
+             └── decides whether task continues or enters REVIEW
+```
+
+This meant that the watchdog could become simpler and more reusable.
+
+It would no longer need to understand the concept of a task beyond identifying enough information to report what happened.
+
+The decision-making logic would move to the Controller.
+
+This was an important refinement of the original separation between process health and task management.
+
+---
+
+18. The context-limit problem
+
+Another particularly important failure mode appeared during real testing.
+
+A local language model can reach the maximum context capacity available to it.
+
+When this happens, simply restarting the process is not necessarily a solution.
+
+The same task can be sent back to the model and encounter the same limitation again.
+
+This creates a potentially dangerous loop:
+
+```
+TASK
+ │
+ ▼
+VIERNES
+ │
+ ▼
+CONTEXT LIMIT
+ │
+ ▼
+RESTART
+ │
+ ▼
+SAME TASK
+ │
+ ▼
+CONTEXT LIMIT
+ │
+ ▼
+RESTART
+ │
+ └───────────────► ...
+```
+
+This revealed an important distinction between recovering a process and recovering a task.
+
+A process can be restarted successfully while the underlying task remains impossible to complete in its current form.
+
+The system therefore needs persistent task state outside the model.
+
+A context failure should eventually become information available to the Controller rather than simply another reason for the watchdog to restart indefinitely.
+
+---
+
+19. Testing the controller with real tasks
+
+Once the Controller was implemented, the architecture could finally be tested as a complete cycle rather than as isolated components.
+
+A task could be selected, sent to Viernes, receive a structured response and be registered in the database.
+
+The intended lifecycle became:
+
+```
+INBOX
+  │
+  ▼
+PROCESSING
+  │
+  ▼
+VIERNES
+  │
+  ▼
+ANALYZED
+  │
+  ├───────────────┐
+  ▼               ▼
+VERIFIED        REVIEW
+```
+
+One of the first integrated tests used a simple factual question:
+
+«How many sides does a triangle have?»
+
+The task was processed successfully.
+
+Viernes returned:
+
+«3 lados.»
+
+The Controller stored the result together with the corresponding metadata and conversation information.
+
+This test was important not because the question itself was difficult, but because it demonstrated that the complete pipeline could operate:
+
+task → Controller → Viernes → structured result → database.
+
+The objective was to verify the architecture rather than the difficulty of the task.
+
+---
+
+20. Testing the direct conversation interface
+
+The Controller also acquired a direct conversation path.
+
+This was intentionally separated from the task queue.
+
+A normal conversation with Viernes should not automatically create a task in the processing database.
+
+The distinction became:
+
+```
+NORMAL CONVERSATION
+USER
+ │
+ ▼
+CONTROLLER
+ │
+ ▼
+VIERNES
+ │
+ ▼
+RESPONSE
+
+
+TASK PROCESSING
+TASK
+ │
+ ▼
+CONTROLLER
+ │
+ ▼
+VIERNES
+ │
+ ▼
+STRUCTURED RESULT
+ │
+ ▼
+DATABASE
+```
+
+This separation prevents ordinary interaction from unnecessarily entering the task-management system.
+
+It also leaves open the possibility of later deciding which conversations should become formal tasks.
+
+---
+
+21. Stress testing and observing real behaviour
+
+The architecture was not considered complete simply because individual tests succeeded.
+
+Several stress tests were performed to observe context usage, token generation and completion behaviour.
+
+The tests confirmed that Viernes could process tasks without immediately exhausting the available context.
+
+Examples included tasks with different input sizes and generation lengths.
+
+The observations also reinforced an important lesson:
+
+«A system can appear to work correctly during a short test while still having failure modes that only appear during longer or repeated operation.»
+
+For this reason, testing became part of the architectural development itself.
+
+The goal was not merely to prove that a component worked once.
+
+It was to discover how it behaved under less favourable conditions.
+
+---
+
+22. The watchdog became a supporting component
+
+As the Controller architecture matured, the role of the watchdog became clearer.
+
+The watchdog is not the intelligence of Viernes.
+
+It is not the task manager.
+
+It is not the Reviewer.
+
+It is not responsible for deciding whether information is correct.
+
+Its role is deliberately narrower:
+
+```
+WATCHDOG
+   │
+   ├── process exists?
+   ├── generation progressing?
+   ├── generation taking too long?
+   ├── context failure?
+   └── restart when required
+```
+
+The Controller operates at a different level:
+
+```
+CONTROLLER
+   │
+   ├── task state
+   ├── task history
+   ├── results
+   ├── verification
+   ├── review
+   └── future recovery decisions
+```
+
+This separation makes the overall system easier to reason about.
+
+A process-health component can remain focused on keeping the service alive while another component manages what the service is actually doing.
+
+---
+
+23. Cleaning the project structure
+
+As development progressed, many experimental files accumulated.
+
+Different watchdog versions, controller prototypes and temporary interface files had been useful during development.
+
+However, keeping every experiment permanently in the active project made it increasingly difficult to distinguish:
+
+* current files;
+* obsolete experiments;
+* stable references;
+* temporary tests.
+
+This led to a deliberate cleanup.
+
+The active project was reduced to the files actually used by the current system.
+
+Instead of keeping a large collection of old versions, a single current backup was created under:
+
+```
+versiones/
+└── BACKUP_ACTUAL_2026-09-28/
+```
+
+The backup contains the current launcher, watchdog, system instructions, direct-start script and Controller files.
+
+The purpose of the backup is different from the active system.
+
+The active files are used to run Viernes.
+
+The backup exists to preserve a known working state before future architectural changes.
+
+This was another practical lesson:
+
+«A backup is more useful when it represents a clearly identified state rather than becoming a collection of indistinguishable experiments.»
+
+---
+
+24. The GitHub backup
+
+After the local backup had been cleaned and verified, another problem appeared:
+
+How should the current state be preserved outside the computer?
+
+Git was installed and configured locally, and the existing GitHub repository `Viernes-1.0` was connected to the project.
+
+The first local Git repository was then initialized in the Viernes directory.
+
+Only the `versiones` directory was selected for version control.
+
+The local model, llama.cpp binaries, DLL files, logs and other runtime files were deliberately excluded.
+
+The database was also excluded because it contains runtime state rather than source code and may contain conversation or other operational data.
+
+The first local commit preserved the current backup:
+
+```
+563a75e
+Backup actual de Viernes 2026-09-28
+```
+
+The existing GitHub history was then integrated locally rather than overwritten.
+
+This preserved the documentation that already existed in the remote repository while adding the current Viernes backup.
+
+The integration was committed as:
+
+```
+a6d6040
+Integrar historial de GitHub con backup actual de Viernes
+```
+
+The resulting branch was pushed to GitHub.
+
+The remote repository therefore became an additional external preservation point for the current project state.
+
+---
+
+25. The current state
+
+At this stage, Viernes consists of more than a local language model.
+
+The system now includes several distinct layers:
+
+```
+                         USER
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ CONTROLLER  │
+                    └──────┬──────┘
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+        DIRECT CHAT               TASK PROCESSING
+              │                         │
+              └────────────┬────────────┘
+                           ▼
+                    ┌─────────────┐
+                    │   VIERNES   │
+                    │  Local LLM  │
+                    └──────┬──────┘
+                           │
+                           ▼
+                    RESULT / OUTPUT
+                           │
+                           ▼
+                    REVIEW / VERIFY
+                           │
+                           ▼
+                       DATABASE
+
+
+                    WATCHDOG
+                       │
+                       ▼
+                PROCESS HEALTH
+                       │
+                       ▼
+                    RECOVERY
+```
+
+The architecture remains deliberately modular.
+
+The model performs language generation and reasoning.
+
+The Controller manages tasks and persistent state.
+
+The Reviewer provides a verification boundary.
+
+The watchdog protects the running process.
+
+Specialized bots can provide deterministic capabilities when appropriate.
+
+The launcher manages startup and service continuity.
+
+None of these components is intended to replace the others.
+
+---
+
+26. What the project has demonstrated so far
+
+The most important result of the project is not a single component.
+
+It is the discovery that a relatively small local model can become substantially more useful when surrounded by appropriate infrastructure.
+
+The development process demonstrated several practical principles.
+
+First, reliability cannot be delegated entirely to the model.
+
+Second, process recovery and task recovery are different problems.
+
+Third, persistent state becomes increasingly important as soon as tasks can survive beyond a single inference.
+
+Fourth, verification should be separated from generation when generated information may later become trusted knowledge.
+
+Fifth, simple deterministic software can often perform supporting operations more reliably than asking the language model to perform them.
+
+Finally, architectural complexity should be introduced in response to real problems rather than added simply because other AI systems use similar components.
+
+The project therefore continues to follow the same principle that guided its earliest development:
+
+«Build the simplest system that solves the problem that actually exists.»
+
+---
+
+27. The next stage
+
+The architecture is not considered finished.
+
+The next stage is focused on strengthening the separation between the Controller, Viernes and the watchdog before adding further complexity.
+
+Particular areas of interest include:
+
+* persistent task recovery after process restarts;
+* reliable handling of context-limit failures;
+* Controller-based decisions for repeated task failures;
+* clearer task verification and REVIEW workflows;
+* communication between external components and Viernes;
+* controlled integration of specialized bots;
+* improved preservation of useful context without inventing user-specific information;
+* and continued testing under real operating conditions.
+
+The intention is not to predict the final architecture.
+
+As with the earlier stages, future components should be introduced only when practical testing demonstrates that they are needed.
+
+The history of Viernes is therefore still being written.
