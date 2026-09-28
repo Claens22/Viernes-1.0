@@ -1,0 +1,5 @@
+﻿*
+!.gitignore
+!versiones/
+!versiones/**
+versiones/BACKUP_ACTUAL_2026-09-28/controlador/viernes.db
